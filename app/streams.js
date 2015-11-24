@@ -15,8 +15,19 @@ module.exports = function() {
 
   return {
     addStream : function(id, name) {
+      var index = 0;
+      while(index < streamList.length && streamList[index].id != id){
+        index++;
+      }
+      if (index < streamList.length) {
+          console.log('--- Attempt to add duplicate stream with id: ' + id + ' name: ' + name + ' ---')
+          //this.update(id, name)
+          return
+      }
       var stream = new Stream(id, name);
       streamList.push(stream);
+      console.log('--- added stream with id: ' + id + ' name: ' + name + ' ---');
+      console.log(streamList);
     },
 
     removeStream : function(id) {
@@ -24,7 +35,10 @@ module.exports = function() {
       while(index < streamList.length && streamList[index].id != id){
         index++;
       }
+      console.log(streamList);
       streamList.splice(index, 1);
+      console.log('--- removed stream with id: ' + id + '  index: ' + index);
+      console.log(streamList);
     },
 
     // update function
