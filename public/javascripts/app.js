@@ -68,6 +68,7 @@
 		};
 
 		rtc.view = function(stream){
+			console.log("view function executed");
 			client.peerInit(stream.id);
 			stream.isPlaying = !stream.isPlaying;
 		};
@@ -76,6 +77,7 @@
 			 * This happens when you load <serverUrl>/<socketId> : 
 			 * it calls socketId immediatly.
 			**/
+			console.log("call function executed");
 			if(!stream.id){
 				stream = {id: stream, isPlaying: false};
 				rtc.remoteStreams.push(stream);
@@ -103,6 +105,14 @@
 					console.log(err);
 				});
 			}
+		};
+		rtc.test = function(stream){
+			console.log("test function executed");
+			if(!stream.id){
+				stream = {id: stream, isPlaying: false};
+				rtc.remoteStreams.push(stream);
+			}
+			client.addDataChannel(stream.id);
 		};
 
 		//initial load
@@ -138,7 +148,7 @@
 				camera.start()
 				.then(function(result) {
 					localStream.link = $window.location.host + '/' + client.getId();
-					client.send('readyToStream', { name: localStream.name });
+					client.send('register_client', JSON.stringify({ name: localStream.name }));
 				})
 				.catch(function(err) {
 					console.log(err);

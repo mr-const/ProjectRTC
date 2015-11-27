@@ -1,11 +1,12 @@
 var PeerManager = (function () {
-
+  
   var localId,
       config = {
         peerConnectionConfig: {
           iceServers: [
-            {"url": "stun:23.21.150.121"},
-            {"url": "stun:stun.l.google.com:19302"}
+            // will now receive list from server with welcome message
+            // {"url": "stun:23.21.150.121"},
+            // {"url": "stun:stun.l.google.com:19302"}
           ]
         },
         peerConnectionConstraints: {
@@ -20,10 +21,15 @@ var PeerManager = (function () {
       socket = io();
       
   socket.on('message', handleMessage);
-  socket.on('id', function(id) {
-    localId = id;
+  socket.on('welcome', function(data) {
+    json = JSON.parse(data);
+    localId = json.id;
+    config.peerConnectionConfig.iceServers = json.ice_servers.map(function(x) { return {"url": x}; });
+
+    console.log("Connected. ID: " + localId);
+    console.log("iceServers: " + JSON.stringify(config.peerConnectionConfig.iceServers));
   });
-      
+
   function addPeer(remoteId) {
     var peer = new Peer(config.peerConnectionConfig, config.peerConnectionConstraints);
     peer.pc.onicecandidate = function(event) {
@@ -77,7 +83,8 @@ var PeerManager = (function () {
       error
     );
   }
-  function handleMessage(message) {
+  function handleMessage(jsonMessage) {
+    var message = JSON.parse(jsonMessage);
     var type = message.type,
         from = message.from,
         pc = (peerDatabase[from] || addPeer(from)).pc;
@@ -110,11 +117,11 @@ var PeerManager = (function () {
   function send(type, to, payload) {
     console.log('sending ' + type + ' to ' + to);
 
-    socket.emit('message', {
+    socket.emit('message', JSON.stringify({
       to: to,
       type: type,
       payload: payload
-    });
+    }));
   }
   function toggleLocalStream(pc) {
     if(localStream) {
@@ -153,11 +160,42 @@ var PeerManager = (function () {
     
     peerInit: function(remoteId) {
       peer = peerDatabase[remoteId] || addPeer(remoteId);
-      send('init', remoteId, null);
+      //§send('init', remoteId, null);
+      offer(remoteId);
     },
 
     peerRenegociate: function(remoteId) {
       offer(remoteId);
+    },
+
+    addDataChannel: function(remoteId) {
+      peer = peerDatabase[remoteId] || addPeer(remoteId);
+
+      var peerConnection = peer.pc;
+
+      var dataChannelOptions = {
+        ordered: true,
+        maxRetransmitTime: 3000, //ms
+      };
+
+      var dataChannel = peerConnection.createDataChannel("dataChannelTest", dataChannelOptions);
+
+      dataChannel.onerror = function (error) {
+        console.log("Data Channel Error:", error);
+      };
+
+      dataChannel.onmessage = function (event) {
+        console.log("Got Data Channel Message:". event.Data);
+      };
+
+      dataChannel.onopen = function () {
+        console.log("Data Channel OnOpen:");
+        dataChannel.send("Hello DataChannel!");
+      };
+
+      dataChannel.onclose = function() {
+        console.log("The Data Channel is Closed");
+      };
     },
 
     send: function(type, payload) {
