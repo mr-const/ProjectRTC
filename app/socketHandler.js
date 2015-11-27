@@ -2,23 +2,42 @@ module.exports = function(io, streams) {
 
   io.on('connection', function(client) {
     console.log('-- ' + client.id + ' joined --');
-    client.emit('id', client.id);
 
-    client.on('message', function (details) {
-      var otherClient = io.sockets.connected[details.to];
+    var iceServers = [
+      "stun://stun.l.google.com:19302",
+      "stun://stun1.l.google.com:19302",
+      "stun://stun2.l.google.com:19302",
+      "stun://stun3.l.google.com:19302",
+      "stun://stun4.l.google.com:19302"
+    ]
+
+    var welcomeMessage = {
+      id: client.id,
+      ice_servers: iceServers
+    }
+
+    client.emit('welcome', JSON.stringify(welcomeMessage));
+
+    client.on('message', function (data) {
+      var message = JSON.parse(data)
+
+      var otherClient = io.sockets.connected[message.to];
+
+      console.log('-- Message from ' + client.id + ' to ' + message.to + ' --')
 
       if (!otherClient) {
         return;
       }
-        delete details.to;
-        details.from = client.id;
-        otherClient.emit('message', details);
+        delete message.to;
+        message.from = client.id;
+        otherClient.emit('message', JSON.stringify(message));
     });
       
-    client.on('readyToStream', function(options) {
-      console.log('-- ' + client.id + ' is ready to stream --');
+    client.on('register_client', function(data) {
+      var clientDescription = JSON.parse(data)
+      console.log('-- ' + client.id + ' registered with name: ' + clientDescription.name + ' --');
       
-      streams.addStream(client.id, options.name); 
+      streams.addStream(client.id, clientDescription.name); 
     });
     
     client.on('update', function(options) {
