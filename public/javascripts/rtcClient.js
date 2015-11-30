@@ -19,8 +19,8 @@ var PeerManager = (function () {
         var streamAvailable = !!localStream
         return {
             mandatory: {
-                offerToReceiveAudio: true,
-                offerToReceiveVideo: true
+                OfferToReceiveAudio: true,
+                OfferToReceiveVideo: true
             },
             optional: [
                 {DtlsSrtpKeyAgreement: true},
