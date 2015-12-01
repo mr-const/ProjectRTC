@@ -21,6 +21,10 @@ module.exports = function (io, streams) {
         client.on('message', function (data) {
             var message = JSON.parse(data)
 
+            if (message.to == client.id) {
+                console.log('-- Attempt to send message to yourself. Blocking.')
+            }
+
             var otherClient = io.sockets.connected[message.to];
 
             console.log('-- Message from ' + client.id + ' to ' + message.to + ' --')

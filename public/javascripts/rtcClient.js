@@ -8,7 +8,8 @@ var PeerManager = (function () {
                     // {"url": "stun:23.21.150.121"},
                     // {"url": "stun:stun.l.google.com:19302"}
                 ]
-            }
+            },
+            controlDataChannelName: "control_data_channel"
         },
         peerDatabase = {},
         localStream,
@@ -24,7 +25,7 @@ var PeerManager = (function () {
             },
             optional: [
                 {DtlsSrtpKeyAgreement: true},
-                {RtpDataChannels: true}
+                {'enable-sctp-data-channels': true}
             ]
         }
     }
@@ -61,15 +62,28 @@ var PeerManager = (function () {
             remoteVideosContainer.removeChild(peer.remoteVideoEl);
         };
         peer.pc.oniceconnectionstatechange = function (event) {
-            console.log(event)
-            switch (
-                (  event.srcElement // Chrome
-                || event.target   ) // Firefox
-                    .iceConnectionState) {
+            var state = (event.srcElement // Chrome
+                      || event.target) // Firefox
+                .iceConnectionState
+            console.log('ICE connection state changed to ' + state)
+            switch (state) {
                 case 'disconnected':
                     remoteVideosContainer.removeChild(peer.remoteVideoEl);
+                    if (peer.dc) {
+                        peer.dc.close();
+                        delete peer.dc;
+                    }
                     break;
             }
+        };
+        peer.pc.ondatachannel = function (event) {
+            if (event.channel.label != config.controlDataChannelName) {
+                console.log('Unexpected data channel ' + event.channel.label)
+                return
+            }
+            console.log('Received control data channel')
+            peer.dc = event.channel
+            initDataChannel(peer.dc)
         };
         peerDatabase[remoteId] = peer;
 
@@ -90,6 +104,7 @@ var PeerManager = (function () {
 
     function offer(remoteId) {
         var pc = peerDatabase[remoteId].pc;
+        createControlChannel(remoteId)
         pc.createOffer(
             function (sessionDescription) {
                 pc.setLocalDescription(sessionDescription);
@@ -98,6 +113,29 @@ var PeerManager = (function () {
             error,
             mediaConstraints()
         );
+    }
+
+    function createControlChannel(remoteId) {
+        var peer = peerDatabase[remoteId]
+        var dataChannelConfig = {
+            id: 0,
+            maxRetransmits: 0
+        }
+        peer.dc = peer.pc.createDataChannel(config.controlDataChannelName, dataChannelConfig)
+        console.log('Creating control data channel')
+        initDataChannel(peer.dc)
+    }
+
+    function initDataChannel(channel) {
+        channel.onmessage = function (event) {
+            console.log('Received message' + event.data)
+        };
+        channel.onopen = function () {
+            console.log('Channel ' + channel.label + ' opened')
+        };
+        channel.onclose = function () {
+            console.log('Channel ' + channel.label + ' closed')
+        };
     }
 
     function handleMessage(jsonMessage) {
@@ -114,18 +152,20 @@ var PeerManager = (function () {
                 offer(from);
                 break;
             case 'offer':
-                pc.setRemoteDescription(new RTCSessionDescription({
+                var sessionDescription = new RTCSessionDescription({
                     type: 'offer',
                     sdp: message.payload.sdp
-                }), function () {
+                })
+                pc.setRemoteDescription(sessionDescription, function () {
                 }, error);
                 answer(from);
                 break;
             case 'answer':
-                pc.setRemoteDescription(new RTCSessionDescription({
+                var sessionDescription = new RTCSessionDescription({
                     type: 'answer',
                     sdp: message.payload.sdp
-                }), function () {
+                })
+                pc.setRemoteDescription(sessionDescription, function () {
                 }, error);
                 break;
             case 'candidate':
@@ -155,6 +195,17 @@ var PeerManager = (function () {
         if (localStream) {
             (!!pc.getLocalStreams().length) ? pc.removeStream(localStream) : pc.addStream(localStream);
         }
+    }
+
+    function sendControlMessage(remoteId, message) {
+        peer = peerDatabase[remoteId]
+
+        if (!peer.dc || peer.dc.readyState != 'open') {
+            console.log('Attempt to send control message to peer without being connected to it')
+            return
+        }
+
+        peer.dc.send(message)
     }
 
     function error(err) {
@@ -193,42 +244,17 @@ var PeerManager = (function () {
             offer(remoteId);
         },
 
-        peerRenegociate: function (remoteId) {
+        peerRenegotiate: function (remoteId) {
             offer(remoteId);
-        },
-
-        addDataChannel: function (remoteId) {
-            peer = peerDatabase[remoteId] || addPeer(remoteId);
-
-            var peerConnection = peer.pc;
-
-            var dataChannelOptions = {
-                ordered: true,
-                maxRetransmitTime: 3000, //ms
-            };
-
-            var dataChannel = peerConnection.createDataChannel("dataChannelTest", dataChannelOptions);
-
-            dataChannel.onerror = function (error) {
-                console.log("Data Channel Error:", error);
-            };
-
-            dataChannel.onmessage = function (event) {
-                console.log("Got Data Channel Message:".event.Data);
-            };
-
-            dataChannel.onopen = function () {
-                console.log("Data Channel OnOpen:");
-                dataChannel.send("Hello DataChannel!");
-            };
-
-            dataChannel.onclose = function () {
-                console.log("The Data Channel is Closed");
-            };
         },
 
         send: function (type, payload) {
             socket.emit(type, payload);
+        },
+
+        sendControlMessage: function (remoteId, message) {
+            peer = peerDatabase[remoteId] || addPeer(remoteId)
+            sendControlMessage(remoteId, message)
         }
     };
 

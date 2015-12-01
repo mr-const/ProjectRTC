@@ -90,7 +90,7 @@
             if (camera.isOn) {
                 client.toggleLocalStream(stream.id);
                 if (stream.isPlaying) {
-                    client.peerRenegociate(stream.id);
+                    client.peerRenegotiate(stream.id);
                 } else {
                     client.peerInit(stream.id);
                 }
@@ -100,7 +100,7 @@
                     .then(function (result) {
                         client.toggleLocalStream(stream.id);
                         if (stream.isPlaying) {
-                            client.peerRenegociate(stream.id);
+                            client.peerRenegotiate(stream.id);
                         } else {
                             client.peerInit(stream.id);
                         }
@@ -118,6 +118,14 @@
                 rtc.remoteStreams.push(stream);
             }
             client.addDataChannel(stream.id);
+        };
+        rtc.sendYummie = function (stream) {
+            console.log('sendYummie function executed')
+            client.sendControlMessage(stream.id, 'Yummie')
+        };
+        rtc.sendFoo = function (stream) {
+            console.log('sendFoo function executed')
+            client.sendControlMessage(stream.id, 'Foo')
         };
 
         //initial load
